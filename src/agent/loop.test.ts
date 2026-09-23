@@ -67,4 +67,40 @@ describe('AgentLoop', () => {
     expect(result.finalText).toBe('done')
     expect(result.toolResults[0]).toMatchObject({ name: 'echo', ok: true, output: 'echo:hello' })
   })
+
+  it('blocks a risky tool unless approval is granted', async () => {
+    const tool = {
+      name: 'run_command',
+      description: 'Run a shell command',
+      risk: 'risky' as const,
+      inputSchema: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] },
+      validate(input: unknown) {
+        if (typeof input !== 'object' || input === null) return { code: 'invalid', message: 'expect object' }
+        return input as { command: string }
+      },
+      async execute() {
+        return { ok: true, output: 'ok' }
+      },
+    }
+
+    const provider = {
+      name: 'fake',
+      async complete() {
+        return {
+          id: 'response-1',
+          model: 'fake-model',
+          content: '',
+          toolCalls: [{ id: 'call-1', name: 'run_command', arguments: { command: 'ls -la' } }],
+          finishReason: 'tool_calls',
+        }
+      },
+    }
+
+    const loop = new AgentLoop(provider, new Map([['run_command', tool]]), { model: 'fake-model' }, {
+      evaluate: () => 'approve',
+    })
+
+    const result = await loop.run([{ role: 'user', content: 'Run a command' }])
+    expect(result.toolResults[0]).toMatchObject({ name: 'run_command', ok: false, error: 'Approval required before executing tool: run_command' })
+  })
 })

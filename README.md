@@ -4,7 +4,7 @@ A simple, understandable, plugin-based agent harness inspired by DeepSeek Harnes
 
 ## Current stage
 
-Bel now includes a plugin runtime, tool registry, filesystem and shell plugins, Git tooling, OpenRouter provider abstraction, and an agent loop that issues tool calls, executes them, and feeds results back into the model until a final answer is reached. The architecture stays intentionally small and easy to reason about.
+Bel now includes a plugin runtime, tool registry, filesystem and shell plugins, Git tooling, OpenRouter provider abstraction, agent loop orchestration, and a simple safety/approval gate. The runtime is intentionally small, and the approval layer blocks risky actions until they are explicitly approved.
 
 ## Development
 
@@ -26,11 +26,11 @@ Bel keeps a small application structure:
 - `src/services` — filesystem, shell, persistence, and other services
 - `src/db` — SQLite storage
 - `src/llm` — provider abstractions and OpenRouter
-- `src/agent` — agent loop and orchestration
+- `src/agent` — agent loop and safety gates
 - `src/ui` — web presentation
 - `src/shared` — shared domain types and utilities
 
-The data flow remains simple: user prompt → agent loop → LLM → tool plugin → tool result → LLM → final answer.
+The data flow remains simple: user prompt → agent loop → LLM → safety policy → tool plugin → tool result → LLM → final answer.
 
 ## Inspiration
 

@@ -1,5 +1,3 @@
-import type { SessionEvent } from '../shared/types'
-
 export interface ToolCallContext {
   readonly sessionId: string
   readonly signal?: AbortSignal
@@ -22,6 +20,8 @@ export interface ToolDefinition<TInput = unknown> {
   readonly name: string
   readonly description: string
   readonly inputSchema: Record<string, unknown>
+  readonly risk?: 'safe' | 'risky' | 'destructive'
+  readonly requiresApproval?: boolean
   validate(input: unknown): TInput | ToolError
   execute(input: TInput, context: ToolCallContext): Promise<ToolResult>
 }

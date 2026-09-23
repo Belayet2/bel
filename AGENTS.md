@@ -6,7 +6,7 @@ Bel is a personal, understandable, plugin-based agent harness. It is inspired by
 
 ## Current stage
 
-Bel now includes a plugin runtime, tool registry, filesystem plugin, shell plugin, Git plugin, OpenRouter provider abstraction, and an agent loop that can call tools and continue until the model returns a final answer. The project continues to keep the architecture simple and readable.
+Bel now includes a plugin runtime, tool registry, filesystem and shell plugins, Git plugin, OpenRouter provider abstraction, agent loop orchestration, and a lightweight safety/approval system. The project stays small and readable while still modeling the real control flow of an agent harness.
 
 ## Rules
 
@@ -29,6 +29,7 @@ Bel now includes a plugin runtime, tool registry, filesystem plugin, shell plugi
 - Tool input is validated before execution.
 - Tool failures use structured error codes instead of untyped thrown errors.
 - The agent loop is the orchestration layer: it sends prompts to the provider, executes tool calls, and loops until the final answer arrives.
+- The approval gate blocks risky or destructive operations until the user explicitly approves them.
 - The loop should eventually persist tool calls, events, and session state in SQLite.
 
 ## UI direction

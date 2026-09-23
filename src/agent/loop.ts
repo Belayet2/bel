@@ -1,5 +1,6 @@
-import type { LlmProvider, LlmResponse, LlmToolCall } from '../llm/types'
+import type { LlmProvider, LlmResponse } from '../llm/types'
 import type { ToolDefinition } from '../tools/types'
+import type { ApprovalGate } from './safety'
 
 export interface AgentMessage {
   readonly role: 'user' | 'assistant' | 'tool' | 'system'
@@ -27,6 +28,7 @@ export class AgentLoop {
     private readonly provider: LlmProvider,
     private readonly tools: ReadonlyMap<string, ToolDefinition>,
     private readonly config: AgentLoopConfig,
+    private readonly approvalGate?: ApprovalGate,
   ) {}
 
   async run(messages: readonly AgentMessage[], signal?: AbortSignal): Promise<{ finalText: string; toolResults: ToolExecutionResult[]; response: LlmResponse }> {
@@ -60,6 +62,28 @@ export class AgentLoop {
           toolResults.push({ toolCallId: toolCall.id, name: toolCall.name, ok: false, error: errorText })
           conversation.push({ role: 'tool', content: errorText, name: toolCall.name, toolCallId: toolCall.id })
           continue
+        }
+
+        if (this.approvalGate) {
+          const decision = this.approvalGate.evaluate({
+            toolName: toolCall.name,
+            input: toolCall.arguments,
+            risk: toolDefinition.risk ?? 'safe',
+          })
+
+          if (decision === 'deny') {
+            const errorText = `Tool execution denied by safety policy: ${toolCall.name}`
+            toolResults.push({ toolCallId: toolCall.id, name: toolCall.name, ok: false, error: errorText })
+            conversation.push({ role: 'tool', content: errorText, name: toolCall.name, toolCallId: toolCall.id })
+            continue
+          }
+
+          if (decision === 'approve') {
+            const errorText = `Approval required before executing tool: ${toolCall.name}`
+            toolResults.push({ toolCallId: toolCall.id, name: toolCall.name, ok: false, error: errorText })
+            conversation.push({ role: 'tool', content: errorText, name: toolCall.name, toolCallId: toolCall.id })
+            continue
+          }
         }
 
         const validationResult = toolDefinition.validate(toolCall.arguments)
@@ -103,6 +127,6 @@ export class AgentLoop {
   }
 }
 
-export function createAgentLoop(provider: LlmProvider, tools: ReadonlyMap<string, ToolDefinition>, config: AgentLoopConfig): AgentLoop {
-  return new AgentLoop(provider, tools, config)
+export function createAgentLoop(provider: LlmProvider, tools: ReadonlyMap<string, ToolDefinition>, config: AgentLoopConfig, approvalGate?: ApprovalGate): AgentLoop {
+  return new AgentLoop(provider, tools, config, approvalGate)
 }
