@@ -4,7 +4,7 @@ A simple, understandable, plugin-based agent harness inspired by DeepSeek Harnes
 
 ## Current stage
 
-Bel now includes a plugin runtime, tool registry, filesystem and shell plugins, Git tooling, OpenRouter provider abstraction, agent loop orchestration, and a simple safety/approval gate. The runtime is intentionally small, and the approval layer blocks risky actions until they are explicitly approved.
+Bel now includes a plugin runtime, typed tool registry, filesystem and shell plugins, Git tooling, OpenRouter provider abstraction, agent-loop orchestration, safety/approval checks, and durable agent-turn persistence. Agent turns now record user/assistant messages, tool outcomes, lifecycle events, and completed/failed session status through a storage interface.
 
 ## Development
 
@@ -26,12 +26,12 @@ Bel keeps a small application structure:
 - `src/services` — filesystem, shell, persistence, and other services
 - `src/db` — SQLite storage
 - `src/llm` — provider abstractions and OpenRouter
-- `src/agent` — agent loop and safety gates
+- `src/agent` — agent loop, safety, and durable turn orchestration
 - `src/ui` — web presentation
 - `src/shared` — shared domain types and utilities
 
-The data flow remains simple: user prompt → agent loop → LLM → safety policy → tool plugin → tool result → LLM → final answer.
+The data flow remains simple: user prompt → agent loop → LLM → safety policy → tool plugin → durable tool result → LLM → durable final answer.
 
 ## Inspiration
 
-Bel takes architectural inspiration from [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), especially its separation of plugin-owned capabilities, tool registration, durable session events, and UI projections. Bel intentionally avoids large package splitting and a framework-heavy architecture.
+Bel takes architectural inspiration from [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), especially its durable session event log, model-visible activity being reconstructable, plugin-owned capabilities, and UI projections. Bel intentionally avoids large package splitting and a framework-heavy architecture.

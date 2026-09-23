@@ -6,7 +6,7 @@ Bel is a personal, understandable, plugin-based agent harness. It is inspired by
 
 ## Current stage
 
-Bel now includes a plugin runtime, tool registry, filesystem and shell plugins, Git plugin, OpenRouter provider abstraction, agent loop orchestration, and a lightweight safety/approval system. The project stays small and readable while still modeling the real control flow of an agent harness.
+Bel has a plugin runtime, tool registry, filesystem/shell/Git plugins, OpenRouter provider abstraction, agent loop, safety/approval layer, and durable agent-turn orchestration. The durable runner records turn lifecycle, messages, tool outcomes, and session status through a storage interface backed by the SQLite session repository.
 
 ## Rules
 
@@ -30,7 +30,8 @@ Bel now includes a plugin runtime, tool registry, filesystem and shell plugins, 
 - Tool failures use structured error codes instead of untyped thrown errors.
 - The agent loop is the orchestration layer: it sends prompts to the provider, executes tool calls, and loops until the final answer arrives.
 - The approval gate blocks risky or destructive operations until the user explicitly approves them.
-- The loop should eventually persist tool calls, events, and session state in SQLite.
+- Durable agent runs persist lifecycle facts after successful storage operations.
+- Model-visible activity should be reconstructable from persisted messages, tool calls, and session events.
 
 ## UI direction
 
@@ -39,8 +40,6 @@ The UI has three primary surfaces: a session/workspace sidebar, a conversation s
 ## Persistence rules
 
 - Session events are durable facts.
-- Model-visible activity should be reconstructable from persisted events.
-- The UI should depend on runtime contracts rather than database details.
-- Read and write operations should go through a small runtime adapter.
 - SQLite is the durable source of truth for sessions and events.
+- The durable runner must not place database details inside React components.
 - UI-only expanded states are not durable session data.
