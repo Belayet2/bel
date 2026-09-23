@@ -1,10 +1,10 @@
 # Bel
 
-A simple, understandable, plugin-based agent harness inspired by DeepSeek Harness.
+Bel is a small, understandable, plugin-based agent harness inspired by DeepSeek Harness.
 
 ## Current stage
 
-Bel now has integrated filesystem and shell runtime services. Both capabilities are workspace-scoped, use bounded output, support cancellation/timeouts, and are exposed through plugins mounted by `SimplePluginRuntime`. Risky and destructive tools are marked for the safety/approval layer.
+The default Bel runtime now mounts shared filesystem, shell, and Git capabilities through a reversible plugin host and typed tool registry. Filesystem and shell services are workspace-scoped and reusable by multiple plugins. The agent loop and durable session runner consume this runtime but remain independent of the UI.
 
 ## Development
 
@@ -16,13 +16,18 @@ pnpm test
 pnpm build
 ```
 
-## Architecture direction
+## Architecture
 
-- `src/services` owns reusable filesystem and process services.
-- `src/plugins` owns tool registration and cleanup.
-- `src/tools` owns validation and structured results.
-- `src/agent` owns orchestration and safety.
-- `src/db` owns durable session data.
-- `src/ui` consumes runtime/session state and does not execute tools.
+- `src/services` — reusable filesystem, shell, and Git services
+- `src/plugins` — capability plugins and lifecycle registration
+- `src/tools` — validation, schemas, and structured tool results
+- `src/agent` — agent loop, safety, and durable turn orchestration
+- `src/db` — SQLite session persistence
+- `src/llm` — provider contracts and OpenRouter
+- `src/ui` — presentation only
 
-This follows DeepSeek Harness's useful separation between capability providers, tool registration, agent orchestration, durable session events, and UI projections, without copying its Cordis or monorepo complexity.
+The main flow remains:
+
+`user prompt → agent loop → LLM → tool registry → plugin service → tool result → LLM → final answer`
+
+Bel borrows DeepSeek Harness ideas such as capability seams, reversible registrations, durable session facts, and UI projections, without copying its Cordis framework or large monorepo structure.

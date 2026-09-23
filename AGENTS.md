@@ -2,16 +2,17 @@
 
 ## Current stage
 
-Bel has integrated filesystem and shell runtime services. The services are reusable and workspace-scoped; plugins expose them as tools; the agent loop will consume those tools; and durable session events remain owned by the persistence layer.
+Bel now has a default runtime composition that shares workspace-scoped filesystem and shell services across plugins. The default host mounts filesystem, shell, and Git capabilities through the tool registry. The agent loop and durable session runner remain separate consumers of this runtime.
 
 ## Runtime rules
 
 - `SimplePluginRuntime` owns shared service instances and plugin lifecycle.
-- Filesystem and shell plugins register tools; they do not construct duplicate services.
+- Plugins register tools; they do not construct duplicate filesystem or shell services.
 - Workspace paths cannot escape the configured root.
 - Shell output is bounded and commands support timeout/cancellation.
 - Risky/destructive tools must be routed through approval before execution.
 - UI code must not import Node filesystem/process APIs.
+- `createBelRuntime()` is the default composition used by tests and future Node entry points.
 
 ## Inspiration
 
