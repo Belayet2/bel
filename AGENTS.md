@@ -1,45 +1,18 @@
 # Bel project instructions
 
-## Purpose
-
-Bel is a personal, understandable, plugin-based agent harness. It is inspired by DeepSeek Harness's “everything is a plugin” philosophy but intentionally remains small.
-
 ## Current stage
 
-Bel has a plugin runtime, tool registry, filesystem/shell/Git plugins, OpenRouter provider abstraction, agent loop, safety/approval layer, and durable agent-turn orchestration. The durable runner records turn lifecycle, messages, tool outcomes, and session status through a storage interface backed by the SQLite session repository.
-
-## Rules
-
-- Keep the project small and understandable.
-- Use TypeScript, ESM, Node.js 22+, pnpm, React, Vite, Vitest, and SQLite.
-- Keep UI code independent from database, LLM, and tool implementations.
-- Durable session facts belong in the runtime/database layer.
-- Temporary presentation state belongs in the UI layer.
-- Keep plugins self-contained and copyable.
-- Prefer straightforward interfaces over speculative abstractions.
-- Add tests for non-trivial behavior.
-- Use DeepSeek Harness for architectural inspiration only; do not copy its package structure or Cordis framework.
-- Maintain this file whenever the architecture changes.
+Bel has integrated filesystem and shell runtime services. The services are reusable and workspace-scoped; plugins expose them as tools; the agent loop will consume those tools; and durable session events remain owned by the persistence layer.
 
 ## Runtime rules
 
-- Plugins register capabilities through `BelPluginContext`.
-- Registrations return cleanup functions.
-- Plugin setup failures clean up all registrations made during setup.
-- Tool input is validated before execution.
-- Tool failures use structured error codes instead of untyped thrown errors.
-- The agent loop is the orchestration layer: it sends prompts to the provider, executes tool calls, and loops until the final answer arrives.
-- The approval gate blocks risky or destructive operations until the user explicitly approves them.
-- Durable agent runs persist lifecycle facts after successful storage operations.
-- Model-visible activity should be reconstructable from persisted messages, tool calls, and session events.
+- `SimplePluginRuntime` owns shared service instances and plugin lifecycle.
+- Filesystem and shell plugins register tools; they do not construct duplicate services.
+- Workspace paths cannot escape the configured root.
+- Shell output is bounded and commands support timeout/cancellation.
+- Risky/destructive tools must be routed through approval before execution.
+- UI code must not import Node filesystem/process APIs.
 
-## UI direction
+## Inspiration
 
-The UI has three primary surfaces: a session/workspace sidebar, a conversation surface, and a session inspector. This mirrors the useful separation in DeepSeek Harness's `ui-workspace` and `ui-chat` packages while remaining a single application.
-
-## Persistence rules
-
-- Session events are durable facts.
-- SQLite is the durable source of truth for sessions and events.
-- The durable runner must not place database details inside React components.
-- UI-only expanded states are not durable session data.
+Use DeepSeek Harness as architectural inspiration: capability seams have providers, consumers, and registrations; session-visible work is logged; and UI projects runtime/session facts. Bel keeps these ideas in a small application rather than reproducing the original repository's package graph.

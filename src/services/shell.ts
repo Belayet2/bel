@@ -1,40 +1,44 @@
-import { afterEach, describe, expect, it } from 'vitest'
-import { ShellService } from '../services/shell'
-import { SimplePluginRuntime } from './runtime'
-import { InMemoryToolRegistry } from '../tools/registry'
-import { shellPlugin } from './shell-plugin'
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 
-describe('shell plugin', () => {
-  const shellService = new ShellService(process.cwd())
+export type JobStatus = 'running' | 'completed' | 'failed' | 'killed'
+export interface JobRecord { id: string; command: string; pid: number | null; status: JobStatus; stdout: string; stderr: string; startedAt: string; finishedAt?: string; exitCode?: number | null; signal?: string }
+export interface ShellCommandResult { exitCode: number | null; stdout: string; stderr: string; timedOut: boolean }
 
-  afterEach(() => {
-    process.chdir(process.cwd())
-  })
+export class ShellService {
+  private readonly jobs = new Map<string, { record: JobRecord; child: ChildProcessWithoutNullStreams }>()
+  constructor(readonly workspaceRoot = process.cwd()) {}
 
-  it('runs a command and captures stdout', async () => {
-    const result = await shellService.runCommand('node -e "console.log(\'hello bel\')"')
-    expect(result.exitCode).toBe(0)
-    expect(result.stdout).toContain('hello bel')
-  })
+  runCommand(command: string, options: { timeoutMs?: number; maxOutputBytes?: number; signal?: AbortSignal } = {}): Promise<ShellCommandResult> {
+    const timeoutMs = options.timeoutMs ?? 30_000
+    const maxOutputBytes = options.maxOutputBytes ?? 200_000
+    return new Promise((resolve) => {
+      const child = spawn(command, { cwd: this.workspaceRoot, shell: true, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] })
+      let stdout = ''; let stderr = ''; let timedOut = false; let done = false
+      const trim = (value: string): string => value.length > maxOutputBytes ? value.slice(0, maxOutputBytes) + '\n[output truncated]' : value
+      const finish = (exitCode: number | null): void => { if (done) return; done = true; clearTimeout(timer); resolve({ exitCode, stdout: trim(stdout), stderr: trim(stderr), timedOut }) }
+      child.stdout.on('data', chunk => { stdout = trim(stdout + chunk.toString()) })
+      child.stderr.on('data', chunk => { stderr = trim(stderr + chunk.toString()) })
+      const timer = setTimeout(() => { timedOut = true; child.kill('SIGTERM') }, timeoutMs)
+      const abort = (): void => { child.kill('SIGTERM') }
+      options.signal?.addEventListener('abort', abort, { once: true })
+      child.once('close', code => { options.signal?.removeEventListener('abort', abort); finish(code) })
+      child.once('error', () => finish(null))
+    })
+  }
 
-  it('registers shell tools through the plugin runtime', async () => {
-    const runtime = new SimplePluginRuntime(new InMemoryToolRegistry())
-    await runtime.mount(shellPlugin)
-    expect(runtime.tools.list().map(tool => tool.name)).toEqual(expect.arrayContaining(['run_command', 'run_background', 'read_job_output', 'kill_job']))
-  })
+  startBackground(command: string, maxOutputBytes = 200_000): JobRecord {
+    const id = `job-${Date.now()}-${Math.random().toString(16).slice(2)}`
+    const child = spawn(command, { cwd: this.workspaceRoot, shell: true, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] })
+    const record: JobRecord = { id, command, pid: child.pid ?? null, status: 'running', stdout: '', stderr: '', startedAt: new Date().toISOString() }
+    const trim = (value: string): string => value.length > maxOutputBytes ? value.slice(0, maxOutputBytes) + '\n[output truncated]' : value
+    child.stdout.on('data', chunk => { record.stdout = trim(record.stdout + chunk.toString()) })
+    child.stderr.on('data', chunk => { record.stderr = trim(record.stderr + chunk.toString()) })
+    child.once('close', (code, signal) => { record.status = code === 0 ? 'completed' : signal ? 'killed' : 'failed'; record.exitCode = code; record.signal = signal ?? undefined; record.finishedAt = new Date().toISOString() })
+    child.once('error', () => { record.status = 'failed'; record.finishedAt = new Date().toISOString() })
+    this.jobs.set(id, { record, child }); return record
+  }
 
-  it('starts and reads a background job', async () => {
-    const runtime = new SimplePluginRuntime(new InMemoryToolRegistry())
-    await runtime.mount(shellPlugin)
-
-    const launched = await runtime.tools.execute('run_background', { command: 'node -e "setTimeout(() => console.log(\'job done\'), 150)"' }, { sessionId: 'job-1', emit: () => undefined })
-    expect(launched.ok).toBe(true)
-    if (!launched.ok) return
-
-    const parsed = JSON.parse(launched.output ?? '{}')
-    const reading = await runtime.tools.execute('read_job_output', { jobId: parsed.jobId }, { sessionId: 'job-1', emit: () => undefined })
-    expect(reading.ok).toBe(true)
-    if (!reading.ok) return
-    expect(JSON.parse(reading.output ?? '{}')).toHaveProperty('jobId')
-  })
-})
+  readJobOutput(id: string): JobRecord | undefined { return this.jobs.get(id)?.record }
+  killJob(id: string): boolean { const job = this.jobs.get(id); if (!job || job.record.status !== 'running') return false; job.child.kill('SIGTERM'); job.record.status = 'killed'; return true }
+  dispose(): void { for (const { child } of this.jobs.values()) child.kill('SIGTERM'); this.jobs.clear() }
+}

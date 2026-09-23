@@ -4,7 +4,7 @@ A simple, understandable, plugin-based agent harness inspired by DeepSeek Harnes
 
 ## Current stage
 
-Bel now includes a plugin runtime, typed tool registry, filesystem and shell plugins, Git tooling, OpenRouter provider abstraction, agent-loop orchestration, safety/approval checks, and durable agent-turn persistence. Agent turns now record user/assistant messages, tool outcomes, lifecycle events, and completed/failed session status through a storage interface.
+Bel now has integrated filesystem and shell runtime services. Both capabilities are workspace-scoped, use bounded output, support cancellation/timeouts, and are exposed through plugins mounted by `SimplePluginRuntime`. Risky and destructive tools are marked for the safety/approval layer.
 
 ## Development
 
@@ -18,20 +18,11 @@ pnpm build
 
 ## Architecture direction
 
-Bel keeps a small application structure:
+- `src/services` owns reusable filesystem and process services.
+- `src/plugins` owns tool registration and cleanup.
+- `src/tools` owns validation and structured results.
+- `src/agent` owns orchestration and safety.
+- `src/db` owns durable session data.
+- `src/ui` consumes runtime/session state and does not execute tools.
 
-- `src/runtime` — runtime contracts and orchestration
-- `src/plugins` — self-contained capabilities
-- `src/tools` — tool contracts, registry, and execution boundary
-- `src/services` — filesystem, shell, persistence, and other services
-- `src/db` — SQLite storage
-- `src/llm` — provider abstractions and OpenRouter
-- `src/agent` — agent loop, safety, and durable turn orchestration
-- `src/ui` — web presentation
-- `src/shared` — shared domain types and utilities
-
-The data flow remains simple: user prompt → agent loop → LLM → safety policy → tool plugin → durable tool result → LLM → durable final answer.
-
-## Inspiration
-
-Bel takes architectural inspiration from [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), especially its durable session event log, model-visible activity being reconstructable, plugin-owned capabilities, and UI projections. Bel intentionally avoids large package splitting and a framework-heavy architecture.
+This follows DeepSeek Harness's useful separation between capability providers, tool registration, agent orchestration, durable session events, and UI projections, without copying its Cordis or monorepo complexity.
