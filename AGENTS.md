@@ -6,14 +6,17 @@ Bel is a personal, understandable, plugin-based agent harness. It is inspired by
 
 ## Current stage
 
-The first stage is a UI-first vertical slice backed by mock data. The real SQLite persistence layer, plugin runtime, tool registry, OpenRouter provider, agent loop, and safety services are not implemented yet.
+The project is now in the SQLite-backed session persistence stage. The UI is connected to a durable runtime interface that reads and writes sessions, messages, tool calls, events, and file-change records through SQLite-backed storage.
+
+The real LLM provider, agent loop, filesystem tools, shell tools, Git tools, background jobs, sub-agents, and approval workflows are still intentionally not implemented.
 
 ## Rules
 
 - Keep the project small and understandable.
-- Use TypeScript, ESM, Node.js 22+, pnpm, React, Vite, and Vitest.
+- Use TypeScript, ESM, Node.js 22+, pnpm, React, Vite, Vitest, and SQLite.
 - Keep UI code independent from database, LLM, and tool implementations.
-- Put durable session facts in a runtime/service layer; keep temporary display state in the UI.
+- Durable session facts belong in the runtime/database layer.
+- Temporary presentation state belongs in the UI layer.
 - Keep plugins self-contained and copyable.
 - Prefer straightforward interfaces over speculative abstractions.
 - Add tests for non-trivial behavior.
@@ -23,3 +26,12 @@ The first stage is a UI-first vertical slice backed by mock data. The real SQLit
 ## UI direction
 
 The UI has three primary surfaces: a session/workspace sidebar, a conversation surface, and a session inspector. This mirrors the useful separation in DeepSeek Harness's `ui-workspace` and `ui-chat` packages while remaining a single application.
+
+## Persistence rules
+
+- Session events are durable facts.
+- Model-visible activity should be reconstructable from persisted events.
+- The UI should depend on runtime contracts rather than database details.
+- Read and write operations should go through a small runtime adapter.
+- SQLite is the durable source of truth for sessions and events.
+- UI-only expanded states are not persisted as durable session data.
