@@ -1,36 +1,48 @@
-# Bel
+# Bel project instructions
 
-A simple, understandable, plugin-based agent harness inspired by DeepSeek Harness.
+## Purpose
+
+Bel is a personal, understandable, plugin-based agent harness. It is inspired by DeepSeek Harness's “everything is a plugin” philosophy but intentionally remains small.
 
 ## Current stage
 
-Bel now includes a small reversible plugin runtime and typed tool registry, and it has a filesystem capability plugin that can safely read, write, copy, move, delete, list, glob, and grep within the current workspace. This is the first real tool family and follows the plugin-based architecture that later tools will share.
+Bel now has a small reversible plugin runtime, a typed tool registry, a filesystem capability plugin, and a shell/process plugin. The project is moving toward the real agent harness architecture: capabilities are registered as small, self-contained plugins, while the UI and persistence remain separately organized.
 
-## Development
+The real LLM provider, full agent loop, Git tools, background jobs, sub-agents, and approval workflows are still intentionally not implemented.
 
-```bash
-pnpm install
-pnpm dev
-pnpm typecheck
-pnpm test
-pnpm build
-```
+## Rules
 
-## Architecture direction
+- Keep the project small and understandable.
+- Use TypeScript, ESM, Node.js 22+, pnpm, React, Vite, Vitest, and SQLite.
+- Keep UI code independent from database, LLM, and tool implementations.
+- Durable session facts belong in the runtime/database layer.
+- Temporary presentation state belongs in the UI layer.
+- Keep plugins self-contained and copyable.
+- Prefer straightforward interfaces over speculative abstractions.
+- Add tests for non-trivial behavior.
+- Use DeepSeek Harness for architectural inspiration only; do not copy its package structure or Cordis framework.
+- Maintain this file whenever the architecture changes.
 
-Bel keeps a small application structure:
+## Runtime rules
 
-- `src/runtime` — runtime contracts and orchestration
-- `src/plugins` — self-contained capabilities
-- `src/tools` — tool contracts, registry, and execution boundary
-- `src/services` — filesystem, shell, persistence, and other services
-- `src/db` — SQLite storage
-- `src/llm` — provider abstractions and OpenRouter
-- `src/ui` — web presentation
-- `src/shared` — shared domain types and utilities
+- Plugins register capabilities through `BelPluginContext`.
+- Registrations return cleanup functions.
+- Plugin setup failures clean up all registrations made during setup.
+- Tool input is validated before execution.
+- Tool failures use structured error codes instead of untyped thrown errors.
+- A tool does not access React or the database directly; it receives a narrow execution context.
+- The shell service owns process execution and job tracking, while the plugin only exposes tool registration.
+- The agent loop will later consume tool schemas from the registry and persist tool calls/events around execution.
 
-Plugins receive a narrow context, register their tools, and return cleanup functions. This is inspired by DeepSeek Harness's plugin philosophy and capability seams, but Bel stays intentionally smaller and easier to understand.
+## UI direction
 
-## Inspiration
+The UI has three primary surfaces: a session/workspace sidebar, a conversation surface, and a session inspector. This mirrors the useful separation in DeepSeek Harness's `ui-workspace` and `ui-chat` packages while remaining a single application.
 
-Bel takes architectural inspiration from [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), especially its separation of plugin-owned capabilities, tool registration, durable session events, and UI projections. Bel keeps the same ideas but uses a simpler local interface so each tool remains easy to copy into another project.
+## Persistence rules
+
+- Session events are durable facts.
+- Model-visible activity should be reconstructable from persisted events.
+- The UI should depend on runtime contracts rather than database details.
+- Read and write operations should go through a small runtime adapter.
+- SQLite is the durable source of truth for sessions and events.
+- UI-only expanded states are not durable session data.

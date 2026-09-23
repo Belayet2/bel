@@ -20,6 +20,7 @@
     "sql.js": "latest"
   },
   "devDependencies": {
+    "@types/node": "^22.10.2",
     "vitest": "latest",
     "jsdom": "latest",
     "@testing-library/jest-dom": "latest",

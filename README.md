@@ -1,66 +1,36 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { promises as fs } from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
-import { InMemoryToolRegistry } from '../tools/registry'
-import { SimplePluginRuntime } from './runtime'
-import { filesystemPlugin } from './filesystem-plugin'
+# Bel
 
-describe('filesystem plugin', () => {
-  let tempDir: string
+A simple, understandable, plugin-based agent harness inspired by DeepSeek Harness.
 
-  beforeEach(async () => {
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'bel-filesystem-'))
-    process.chdir(tempDir)
-  })
+## Current stage
 
-  afterEach(async () => {
-    process.chdir('/workspace')
-    await fs.rm(tempDir, { recursive: true, force: true })
-  })
+Bel now includes a small reversible plugin runtime, a typed tool registry, a filesystem capability plugin with workspace protections, and a shell/process tool layer for running commands, background jobs, and job output inspection. These capabilities are intentionally kept small and self-contained, so they are easy to copy into another project.
 
-  it('registers filesystem tools and reads files safely', async () => {
-    const runtime = new SimplePluginRuntime(new InMemoryToolRegistry())
-    await runtime.mount(filesystemPlugin)
+## Development
 
-    await fs.mkdir(path.join(tempDir, 'src'), { recursive: true })
-    await fs.writeFile(path.join(tempDir, 'src', 'app.txt'), 'hello bel\nsecond line', 'utf8')
+```bash
+pnpm install
+pnpm dev
+pnpm typecheck
+pnpm test
+pnpm build
+```
 
-    const result = await runtime.tools.execute('read_file', { path: 'src/app.txt' }, { sessionId: 's-1', emit: () => undefined })
-    expect(result.ok).toBe(true)
-    if (!result.ok) return
-    expect(result.output).toContain('hello bel')
-  })
+## Architecture direction
 
-  it('rejects writes outside the workspace root', async () => {
-    const runtime = new SimplePluginRuntime(new InMemoryToolRegistry())
-    await runtime.mount(filesystemPlugin)
+Bel keeps a small application structure:
 
-    const result = await runtime.tools.execute('write_file', { path: '../escape.txt', content: 'bad' }, { sessionId: 's-2', emit: () => undefined })
-    expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.error?.code).toBe('write_file_failed')
-  })
+- `src/runtime` — runtime contracts and orchestration
+- `src/plugins` — self-contained capabilities
+- `src/tools` — tool contracts, registry, and execution boundary
+- `src/services` — filesystem, shell, persistence, and other services
+- `src/db` — SQLite storage
+- `src/llm` — provider abstractions and OpenRouter
+- `src/ui` — web presentation
+- `src/shared` — shared domain types and utilities
 
-  it('supports list_directory, grep, and copy_file', async () => {
-    const runtime = new SimplePluginRuntime(new InMemoryToolRegistry())
-    await runtime.mount(filesystemPlugin)
+Plugins receive a narrow context, register their tools, and return cleanup functions. The shell service keeps command execution and background job tracking in one place so the runtime remains understandable.
 
-    await fs.mkdir(path.join(tempDir, 'nested'), { recursive: true })
-    await fs.writeFile(path.join(tempDir, 'nested', 'alpha.txt'), 'bel agent\nplugin tool', 'utf8')
+## Inspiration
 
-    const list = await runtime.tools.execute('list_directory', { path: '.' }, { sessionId: 's-3', emit: () => undefined })
-    expect(list.ok).toBe(true)
-    if (!list.ok) return
-    expect(list.output).toContain('nested')
-
-    const grep = await runtime.tools.execute('grep', { path: '.', pattern: 'agent' }, { sessionId: 's-3', emit: () => undefined })
-    expect(grep.ok).toBe(true)
-    if (!grep.ok) return
-    expect(grep.output).toContain('alpha.txt')
-
-    const copy = await runtime.tools.execute('copy_file', { from: 'nested/alpha.txt', to: 'nested/alpha-copy.txt' }, { sessionId: 's-3', emit: () => undefined })
-    expect(copy.ok).toBe(true)
-    const copied = await fs.readFile(path.join(tempDir, 'nested', 'alpha-copy.txt'), 'utf8')
-    expect(copied).toContain('agent')
-  })
-})
+Bel takes architectural inspiration from [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), especially its separation of plugin-owned capabilities, tool registration, durable session events, and UI projections. Bel keeps the same ideas but uses a simpler local interface so each capability remains easy to copy into another project.
