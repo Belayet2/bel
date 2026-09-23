@@ -1,36 +1,66 @@
-# Bel
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { promises as fs } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { InMemoryToolRegistry } from '../tools/registry'
+import { SimplePluginRuntime } from './runtime'
+import { filesystemPlugin } from './filesystem-plugin'
 
-A simple, understandable, plugin-based agent harness inspired by DeepSeek Harness.
+describe('filesystem plugin', () => {
+  let tempDir: string
 
-## Current stage
+  beforeEach(async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'bel-filesystem-'))
+    process.chdir(tempDir)
+  })
 
-Bel now has a small reversible plugin runtime and typed tool registry on top of the UI and persistence foundations. Tools validate input, return structured errors, and can be registered/unregistered by plugins. The diagnostics `echo` tool is only a pipeline test; real filesystem, shell, and Git tools come later.
+  afterEach(async () => {
+    process.chdir('/workspace')
+    await fs.rm(tempDir, { recursive: true, force: true })
+  })
 
-## Development
+  it('registers filesystem tools and reads files safely', async () => {
+    const runtime = new SimplePluginRuntime(new InMemoryToolRegistry())
+    await runtime.mount(filesystemPlugin)
 
-```bash
-pnpm install
-pnpm dev
-pnpm typecheck
-pnpm test
-pnpm build
-```
+    await fs.mkdir(path.join(tempDir, 'src'), { recursive: true })
+    await fs.writeFile(path.join(tempDir, 'src', 'app.txt'), 'hello bel\nsecond line', 'utf8')
 
-## Architecture direction
+    const result = await runtime.tools.execute('read_file', { path: 'src/app.txt' }, { sessionId: 's-1', emit: () => undefined })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.output).toContain('hello bel')
+  })
 
-Bel keeps a small application structure:
+  it('rejects writes outside the workspace root', async () => {
+    const runtime = new SimplePluginRuntime(new InMemoryToolRegistry())
+    await runtime.mount(filesystemPlugin)
 
-- `src/runtime` — runtime contracts and orchestration
-- `src/plugins` — self-contained capabilities
-- `src/tools` — tool contracts, registry, and execution boundary
-- `src/services` — filesystem, shell, persistence, and other services
-- `src/db` — SQLite storage
-- `src/llm` — provider abstractions and OpenRouter
-- `src/ui` — web presentation
-- `src/shared` — shared domain types and utilities
+    const result = await runtime.tools.execute('write_file', { path: '../escape.txt', content: 'bad' }, { sessionId: 's-2', emit: () => undefined })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error?.code).toBe('write_file_failed')
+  })
 
-Plugins receive a small context, register capabilities, and return cleanup functions. This is inspired by DeepSeek Harness's reversible plugin registrations and capability seams, but Bel deliberately avoids its Cordis framework and large workspace structure.
+  it('supports list_directory, grep, and copy_file', async () => {
+    const runtime = new SimplePluginRuntime(new InMemoryToolRegistry())
+    await runtime.mount(filesystemPlugin)
 
-## Inspiration
+    await fs.mkdir(path.join(tempDir, 'nested'), { recursive: true })
+    await fs.writeFile(path.join(tempDir, 'nested', 'alpha.txt'), 'bel agent\nplugin tool', 'utf8')
 
-Bel takes architectural inspiration from [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), especially its separation of plugin-owned capabilities, tool registration, durable session events, and UI projections. Bel uses simpler local interfaces so each capability remains easy to copy into another project.
+    const list = await runtime.tools.execute('list_directory', { path: '.' }, { sessionId: 's-3', emit: () => undefined })
+    expect(list.ok).toBe(true)
+    if (!list.ok) return
+    expect(list.output).toContain('nested')
+
+    const grep = await runtime.tools.execute('grep', { path: '.', pattern: 'agent' }, { sessionId: 's-3', emit: () => undefined })
+    expect(grep.ok).toBe(true)
+    if (!grep.ok) return
+    expect(grep.output).toContain('alpha.txt')
+
+    const copy = await runtime.tools.execute('copy_file', { from: 'nested/alpha.txt', to: 'nested/alpha-copy.txt' }, { sessionId: 's-3', emit: () => undefined })
+    expect(copy.ok).toBe(true)
+    const copied = await fs.readFile(path.join(tempDir, 'nested', 'alpha-copy.txt'), 'utf8')
+    expect(copied).toContain('agent')
+  })
+})
